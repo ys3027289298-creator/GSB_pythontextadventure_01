@@ -21,6 +21,8 @@ The game takes place on various grid-like Floors (Nodes) and each cell in the gr
 
 In exploring a combination of crafted and randomly generated Floors, the Player may encounter Events like combat with Creatures and special environment puzzles.
 
+See ENGINE_RULES.md for the node-tree/event-queue transition contract, parser behavior and configuration-error rules.
+
 ##Guidelines##
 
 ###About Node and Leaf###

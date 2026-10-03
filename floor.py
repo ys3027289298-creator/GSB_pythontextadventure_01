@@ -172,12 +172,10 @@ class FloorBase(Node):
 
     def set_goal_complete(self, completion):
 
-        self.goal_complete = True
-
-##        if completion == True or completion == False:
-##            self.goal_complete = completion
-##        else:
-##            print("DEBUG:", "goal_complete must be set to True or False")
+        if completion == True or completion == False:
+            self.goal_complete = completion
+        else:
+            print("CONFIG ERROR: goal_complete must be set to True or False.")
 
     # self.floor_matrix // Correction, map visualization
 

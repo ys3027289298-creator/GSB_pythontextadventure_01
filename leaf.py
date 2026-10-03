@@ -32,6 +32,10 @@
 
 class Leaf(object):
 
+    # Names of room-scoped attributes. RoomBase.on_room_exit() resets these
+    # so transient item state never leaks out of the room it was set in.
+    transient_attributes = ()
+
     def __init__(self, name, description):
         self.name = name
         self.description = description
@@ -62,12 +66,25 @@ class Leaf(object):
         parent.add_children(self)
 
     def reset_parent(self):
+        from node import Node # local import avoids the node <-> leaf import cycle
         if isinstance(self.parent, Node):
             self.parent.remove_children(self)
+        else:
+            self.parent = None
 
     def reparent(self, new_parent):
+        from node import Node
+        if not isinstance(new_parent, Node):
+            print("CONFIG ERROR: the new parent must be a Node object.")
+            return False
         self.reset_parent()
         self.set_parent(new_parent)
+        return True
+
+    def reset_transient_state(self):
+        for attribute in self.transient_attributes:
+            if attribute in self.__dict__:
+                del self.__dict__[attribute] # fall back to the class-level default
 
 ################################################################################################
 #

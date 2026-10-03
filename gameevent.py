@@ -2,17 +2,18 @@
 #
 # Use this as a reference for importing. Instead of "from gameevent import *" use:
 #
-# from gameevent import GameEvent, SpeechEvent, bulk_speech_event, direction_check
+# from gameevent import GameEvent, SpeechEvent, EventQueue, bulk_speech_event, action_is_bool
 #
 # IN THIS MODULE:
 #
 # CLASSES:
 #   * GameEvent
 #   * SpeechEvent
+#   * EventQueue
 #
 # METHODS:
 #   * bulk_speech_event
-#   * direction_check
+#   * action_is_bool
 #
 ################################################################################################
 
@@ -20,12 +21,30 @@ import time
 
 # CLEAN THIS UP START#
 
+# Event lifecycle: PENDING -> DONE. An event fires at most once; reset() is a
+# configuration-time operation and the only way back to PENDING.
 class GameEvent(object):
 
     event_type = ""
 
     def __init__(self):
+        self.triggered = False
         print("Event created")
+
+    def trigger(self):
+        # Fire the event once. Returns True the first time, False afterwards.
+        if self.triggered:
+            return False
+        self.triggered = True
+        self.execute()
+        return True
+
+    def execute(self):
+        # Subclasses override with the event body.
+        pass
+
+    def reset(self):
+        self.triggered = False
 
 # Dialog and Text Parsing. Wraps the print statement with more functionality.
 class SpeechEvent(GameEvent):
@@ -68,6 +87,44 @@ class SpeechEvent(GameEvent):
     def set_sleep(self, sleep):
         self.sleep = sleep
 
+    def execute(self):
+        self.gm()
+
+# FIFO queue of GameEvents. Each event may be queued once and fires at most once.
+class EventQueue(object):
+
+    def __init__(self):
+        self._queue = []
+
+    def enqueue(self, event):
+        if not isinstance(event, GameEvent):
+            print("CONFIG ERROR: only GameEvent objects can be enqueued.")
+            return False
+        if event.triggered:
+            print("CONFIG ERROR: this event has already fired and cannot be re-queued.")
+            return False
+        if event in self._queue:
+            print("CONFIG ERROR: this event is already queued.")
+            return False
+        self._queue.append(event)
+        return True
+
+    def fire_next(self):
+        if not self._queue:
+            print("The event queue is empty.")
+            return False
+        return self._queue.pop(0).trigger()
+
+    def fire_all(self):
+        fired = 0
+        while self._queue:
+            if self.fire_next():
+                fired += 1
+        return fired
+
+    def pending(self):
+        return len(self._queue)
+
 # bulk create SpeechEvents
 # You can pass in empty lists for speaker_list and a single sleep value to sleep_list
 # and their lists will be created from the length of message_list
@@ -100,12 +157,16 @@ def bulk_speech_event(speaker_list, message_list, wait_list):
 # Wrapped check to see if player responded true or false
 def action_is_bool(input_string, desired_bool):
 
+    if not isinstance(input_string, str):
+        return False
+
+    normalized = input_string.strip().lower()
+
     for db in desired_bool:
-        if input_string.lower() == db.lower():
+        if normalized == db.strip().lower():
             return True
-            break
-        else:
-            return False
+
+    return False
 
 
 # CLEAN THIS UP END #

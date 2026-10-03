@@ -58,33 +58,51 @@ class RoomBase(Node):
     # Re-writes the usual Node add/remove child methods to work with dictionaries
     def add_contents(self, contents, content_category):
 
+        if content_category not in self.children:
+            print("CONFIG ERROR:", repr(content_category), "is not a valid room content category. Use one of:", ", ".join(self.children))
+            return False
+
         if isinstance(contents, (Node, Leaf)):#Creature, Item, Pickup, Feature)):
-            self.children[content_category].append(contents)
-            contents.parent = self
+            contents = [contents]
 
-        elif isinstance(contents, list):
+        if not isinstance(contents, list) or not contents:
+            print("CONFIG ERROR: Could not add contents. Contents must be a Node/Leaf or a non-empty list of Node/Leaf.")
+            return False
 
-            for content in contents:
-                self.children[content_category].append(content)
-                content.parent = self
+        for content in contents:
+            if not isinstance(content, (Node, Leaf)):
+                print("CONFIG ERROR:", repr(content), "is not valid Room content (Creature, Item).")
+                return False
 
-        else:
-            print("DEBUG:", "Could not add contents. Contents must be valid Room contents (Creature, Item).")
+        for content in contents:
+            self.children[content_category].append(content)
+            content.parent = self
+
+        return True
 
     def remove_contents(self, contents, content_category):
 
+        if content_category not in self.children:
+            print("CONFIG ERROR:", repr(content_category), "is not a valid room content category. Use one of:", ", ".join(self.children))
+            return False
+
         if isinstance(contents, (Node, Leaf)):#Creature, Item, Pickup, Feature)):
-            self.children[content_category].remove(contents)
-            contents.parent = None
+            contents = [contents]
 
-        elif isinstance(contents, list):
+        if not isinstance(contents, list) or not contents:
+            print("CONFIG ERROR: Could not remove contents. Contents must be a Node/Leaf or a non-empty list of Node/Leaf.")
+            return False
 
-            for content in contents:
-                self.children[content_category].remove(content)
-                content.parent = None
+        for content in contents:
+            if content not in self.children[content_category]:
+                print("CONFIG ERROR:", getattr(content, "name", content), "is not in this room's", content_category)
+                return False
 
-        else:
-            print("DEBUG:", "Could not remove contents. Contents must be a Creature or Item.")
+        for content in contents:
+            self.children[content_category].remove(content)
+            content.parent = None
+
+        return True
 
     def list_contents(self):
 
@@ -97,11 +115,14 @@ class RoomBase(Node):
     def add_exits(self, exitsAdded):
         for char in exitsAdded:
             if char not in self.exits:
-                self.exits += exitsAdded
+                self.exits += char
 
     def remove_exits(self, exitsRemoved):
-        for char in exitsRemove:
-            self.exits.replace(char, "")
+        for char in exitsRemoved:
+            self.exits = self.exits.replace(char, "")
+
+    def get_exits(self):
+        return self.exits
 
     def find_exits(self):
 
@@ -146,14 +167,22 @@ class RoomBase(Node):
             print("DEBUG:", "This room is not part of a Floor does not have exits. Use Floor.add_rooms() to add it to a Floor.")            
 
     # Eventing/Parsing
-    def on_room_enter():
+    def on_room_enter(self):
         print(self.name)
         # What happens when the player enters the Room:
         # Description or Name is printed
         # A list of enemies is printed
         # A list of room items is printed
         # A list of interactive features is printed (switches, blocks, buttons)
-        pass
+
+    def on_room_exit(self):
+        # Leaving a room clears room-scoped (transient) state on its contents
+        # so items reset to their configured defaults for the next visit.
+        for content_category in self.children:
+            for content in self.children[content_category]:
+                reset = getattr(content, "reset_transient_state", None)
+                if callable(reset):
+                    reset()
 
 class RoomEntrance(RoomBase):
 

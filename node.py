@@ -58,39 +58,68 @@ class Node(object):
     def description(self):
         return self._description
 
+    @description.setter
     def description(self, description):
         self._description = description
+
+    # Cycle detection helper: is self above node in the parent chain?
+    def is_ancestor_of(self, node):
+        current = node.parent
+        while current is not None:
+            if current is self:
+                return True
+            current = current.parent
+        return False
 
     # self.children = [] // Modification, Viewing
     def add_children(self, children):
 
         if isinstance(children, (Node, Leaf)):
-            self.children.append(children)
-            children.parent = self # give child reference to its parent Node object
+            children = [children]
 
-        elif isinstance(children, list):
+        if not isinstance(children, list) or not children:
+            print("CONFIG ERROR: add_children expects a Node/Leaf or a non-empty list of Node/Leaf objects.")
+            return False
 
-            for child in children:
-                self.children.append(child)
-                child.parent = self # give child reference to its parent Node object
+        # Validate everything first so a bad child leaves the tree unchanged.
+        for child in children:
+            if not isinstance(child, (Node, Leaf)):
+                print("CONFIG ERROR:", repr(child), "is not a Node/Leaf and cannot be a child of", self.name)
+                return False
+            if child is self or (isinstance(child, Node) and child.is_ancestor_of(self)):
+                print("CONFIG ERROR: cannot add", child.name, "under", self.name + "; it would create a circular parent chain.")
+                return False
+            if child in self.children:
+                print("CONFIG ERROR:", child.name, "is already a child of", self.name)
+                return False
 
-        else:
-            print("DEBUG:", "Could not add children. Children must be a Node/Leaf or a list of Node/Leaf.")
+        for child in children:
+            if child.parent is not None and child.parent is not self:
+                child.reset_parent() # enforce the one-parent invariant
+            self.children.append(child)
+            child.parent = self # give child reference to its parent Node object
+
+        return True
 
     def remove_children(self, children):
 
         if isinstance(children, (Node, Leaf)):
-            self.children.remove(children)
-            children.parent = None
+            children = [children]
 
-        elif isinstance(children, list):
+        if not isinstance(children, list) or not children:
+            print("CONFIG ERROR: remove_children expects a Node/Leaf or a non-empty list of Node/Leaf objects.")
+            return False
 
-            for child in children:
-                self.children.remove(child)
-                child.parent = None
+        for child in children:
+            if child not in self.children:
+                print("CONFIG ERROR:", getattr(child, "name", child), "is not a child of", self.name)
+                return False
 
-        else:
-            print("DEBUG:", "Could not remove children. Children must be a Node/Leaf or a list of Node/Leaf.")
+        for child in children:
+            self.children.remove(child)
+            child.parent = None
+
+        return True
 
     def list_children(self):
 
@@ -114,42 +143,63 @@ class Node(object):
     def reset_parent(self):
         if isinstance(self.parent, Node):
             self.parent.remove_children(self)
+        else:
+            self.parent = None
 
     def reparent(self, new_parent):
+        if not isinstance(new_parent, Node):
+            print("CONFIG ERROR: the new parent must be a Node object.")
+            return False
+        if new_parent is self.parent:
+            return True # already in place, nothing to do
+        if new_parent is self or self.is_ancestor_of(new_parent):
+            print("CONFIG ERROR: cannot move", self.name, "into", new_parent.name + "; it would create a circular parent chain.")
+            return False
         self.reset_parent()
         self.set_parent(new_parent)
+        return True
         
 def node_search(target, parent): # Search a Node object for target object or by target object name (a string)
 
-    target_found = False
+    children = parent.children
+
+    if isinstance(children, dict): # RoomBase stores categorized children
+        children = [content for category in children.values() for content in category]
+
+    if not children:
+        print("Target not found: this node is empty.")
+        return None
 
     if type(target) == str:
 
-        for child in parent.children:
+        for child in children:
             if child.name == target:
-                target_found = True
                 return child
-
-        if target_found == False:
-            print("Target not found in this node.")
 
     elif isinstance(target, (Node, Leaf)):
 
-        for child in parent.children:
-            if child == target:
-                target_found = True
+        for child in children:
+            if child is target:
                 return child
 
-        if target_found == False:
-            print("Target not found in this node.")
+    else:
+        print("Search target must be a name string or a Node/Leaf object.")
+        return None
+
+    print("Target not found in this node.")
+    return None
 
 def node_move(target, destination): # Move the target object to the destination Node
 
-    if isinstance(destination, Node):
-        target.reparent(destination)
+    if not isinstance(target, (Node, Leaf)):
+        print("CONFIG ERROR: the move target is not a Node/Leaf object.")
+        return False
 
-    else:
-        print("The destination is not a Node object.")
+    if not isinstance(destination, Node):
+        print("CONFIG ERROR: the destination is not a Node object.")
+        return False
+
+    return target.reparent(destination)
 
 ################################################################################################
 #

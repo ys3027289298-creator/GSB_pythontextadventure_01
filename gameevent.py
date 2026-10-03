@@ -25,7 +25,27 @@ class GameEvent(object):
     event_type = ""
 
     def __init__(self):
+        # Exactly-once state: NEW (False) -> FIRED (True). Only reset()
+        # may move a FIRED event back to NEW, and that is never automatic.
+        self.triggered = False
         print("Event created")
+
+    def trigger(self):
+        # Returns True the first time the event fires and False on every
+        # later call, so the same event can never fire twice.
+        if self.triggered:
+            return False
+
+        self.triggered = True
+        self.fire()
+        return True
+
+    def fire(self):
+        # Subclasses put the actual event effect here.
+        pass
+
+    def reset(self):
+        self.triggered = False
 
 # Dialog and Text Parsing. Wraps the print statement with more functionality.
 class SpeechEvent(GameEvent):
@@ -68,6 +88,55 @@ class SpeechEvent(GameEvent):
     def set_sleep(self, sleep):
         self.sleep = sleep
 
+    def fire(self):
+        self.gm()
+
+class EventQueue(object):
+
+    # FIFO queue enforcing the legal event transitions:
+    # NEW -> QUEUED -> FIRED (-> NEW only through GameEvent.reset()).
+    # Duplicate events and already-fired events cannot be queued, which
+    # also guarantees fire_all() always terminates (no self-requeue loops).
+
+    def __init__(self):
+        self._queue = []
+
+    def enqueue(self, event):
+
+        if not isinstance(event, GameEvent):
+            print("DEBUG:", "Only GameEvent objects can be queued.")
+            return False
+
+        if event in self._queue:
+            return False # duplicate enqueue rejected
+
+        if event.triggered:
+            return False # FIRED events need reset() before re-queueing
+
+        self._queue.append(event)
+        return True
+
+    def fire_next(self):
+
+        if not self._queue:
+            return None
+
+        event = self._queue.pop(0)
+        event.trigger()
+        return event
+
+    def fire_all(self):
+
+        fired = []
+
+        while self._queue:
+            fired.append(self.fire_next())
+
+        return fired
+
+    def __len__(self):
+        return len(self._queue)
+
 # bulk create SpeechEvents
 # You can pass in empty lists for speaker_list and a single sleep value to sleep_list
 # and their lists will be created from the length of message_list
@@ -101,11 +170,10 @@ def bulk_speech_event(speaker_list, message_list, wait_list):
 def action_is_bool(input_string, desired_bool):
 
     for db in desired_bool:
-        if input_string.lower() == db.lower():
+        if " ".join(input_string.strip().lower().split()) == " ".join(db.strip().lower().split()):
             return True
-            break
-        else:
-            return False
+
+    return False
 
 
 # CLEAN THIS UP END #

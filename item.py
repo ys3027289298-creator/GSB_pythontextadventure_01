@@ -55,19 +55,27 @@
 ################################################################################################
 
 from node import Node, node_search, node_move
-from Leaf import Leaf
+from leaf import Leaf
 
 class ItemContainer(Node):
 
     def __init__(self, name, description):
-        Node.__init__(self, name description)
+        Node.__init__(self, name, description)
 
     #def on_search(self):
 
 class Item(Leaf):
 
     def __init__(self, name, description):
-        Leaf.__init__(self, name description)
+        Leaf.__init__(self, name, description)
+
+        # Per-visit state (e.g. "searched", "used this visit"). It is
+        # transient on purpose: RoomBase.on_room_exit clears it when the
+        # Player leaves the Room so it cannot leak into other Rooms.
+        self.transient_state = {}
+
+    def reset_transient(self):
+        self.transient_state.clear()
 
 class Consumable(Item):
 
@@ -101,4 +109,3 @@ class Armor(Item):
         self.physical_def = physical_def
         self.tarnish_def = tarnish_def
         self.overload_def = overload_def
-

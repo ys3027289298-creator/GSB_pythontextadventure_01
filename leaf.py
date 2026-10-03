@@ -62,12 +62,22 @@ class Leaf(object):
         parent.add_children(self)
 
     def reset_parent(self):
-        if isinstance(self.parent, Node):
+        # Duck-typing instead of isinstance(self.parent, Node): importing
+        # Node here would create a circular import with node.py.
+        if self.parent is not None and hasattr(self.parent, "remove_children"):
             self.parent.remove_children(self)
 
     def reparent(self, new_parent):
+        if new_parent is self.parent:
+            return True # already parented there; nothing to do
+
+        if not hasattr(new_parent, "add_children"):
+            print("DEBUG:", "Could not reparent", self.name, "- the destination cannot contain children.")
+            return False
+
         self.reset_parent()
         self.set_parent(new_parent)
+        return True
 
 ################################################################################################
 #

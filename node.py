@@ -58,6 +58,7 @@ class Node(object):
     def description(self):
         return self._description
 
+    @description.setter
     def description(self, description):
         self._description = description
 
@@ -65,32 +66,74 @@ class Node(object):
     def add_children(self, children):
 
         if isinstance(children, (Node, Leaf)):
-            self.children.append(children)
-            children.parent = self # give child reference to its parent Node object
+            children = [children]
 
-        elif isinstance(children, list):
+        if not isinstance(children, list) or not children:
+            print("DEBUG:", "Could not add children. Children must be a Node/Leaf or a non-empty list of Node/Leaf.")
+            return False
 
-            for child in children:
-                self.children.append(child)
-                child.parent = self # give child reference to its parent Node object
+        added = True
 
-        else:
-            print("DEBUG:", "Could not add children. Children must be a Node/Leaf or a list of Node/Leaf.")
+        for child in children:
+
+            if not isinstance(child, (Node, Leaf)):
+                print("DEBUG:", "Could not add child", child, "- children must be Node/Leaf objects.")
+                added = False
+                continue
+
+            if child in self.children:
+                continue # already a child; keep the no-duplicate invariant
+
+            if self._would_cycle(child):
+                print("DEBUG:", "Could not add", child.name, "- it would create a circular parent chain.")
+                added = False
+                continue
+
+            if child.parent is not None and child.parent is not self:
+                child.reset_parent() # enforce the single-parent invariant
+
+            self.children.append(child)
+            child.parent = self # give child reference to its parent Node object
+
+        return added
 
     def remove_children(self, children):
 
         if isinstance(children, (Node, Leaf)):
-            self.children.remove(children)
-            children.parent = None
+            children = [children]
 
-        elif isinstance(children, list):
+        if not isinstance(children, list) or not children:
+            print("DEBUG:", "Could not remove children. Children must be a Node/Leaf or a non-empty list of Node/Leaf.")
+            return False
 
-            for child in children:
-                self.children.remove(child)
-                child.parent = None
+        removed = True
 
-        else:
-            print("DEBUG:", "Could not remove children. Children must be a Node/Leaf or a list of Node/Leaf.")
+        for child in children:
+
+            if child not in self.children:
+                print("DEBUG:", "Could not remove", getattr(child, "name", child), "- it is not a child of", self.name + ".")
+                removed = False
+                continue
+
+            self.children.remove(child)
+            child.parent = None
+
+        return removed
+
+    def _would_cycle(self, child):
+        # Adding child under self is illegal when child is self or an
+        # ancestor of self (it would close a loop in the parent chain).
+        if child is self:
+            return True
+
+        ancestor = self.parent
+
+        while ancestor is not None:
+            if ancestor is child:
+                return True
+            ancestor = getattr(ancestor, "parent", None)
+
+        return False
 
     def list_children(self):
 
@@ -116,40 +159,57 @@ class Node(object):
             self.parent.remove_children(self)
 
     def reparent(self, new_parent):
+        if new_parent is self.parent:
+            return True # already parented there; nothing to do
+
+        if not isinstance(new_parent, Node):
+            print("DEBUG:", "Could not reparent", self.name, "- the destination is not a Node object.")
+            return False
+
+        if new_parent._would_cycle(self):
+            print("DEBUG:", "Could not move", self.name, "- it would create a circular parent chain.")
+            return False
+
+        # The move is known to be legal, so detach/attach stays atomic.
         self.reset_parent()
         self.set_parent(new_parent)
+        return True
         
 def node_search(target, parent): # Search a Node object for target object or by target object name (a string)
 
-    target_found = False
+    children = parent.children
 
-    if type(target) == str:
+    # RoomBase groups its children in a dict ('creatures', 'pickups',
+    # 'features'); flatten it so searches work on any Node.
+    if isinstance(children, dict):
+        children = [content for group in children.values() for content in group]
 
-        for child in parent.children:
+    if isinstance(target, str):
+
+        for child in children:
             if child.name == target:
-                target_found = True
                 return child
-
-        if target_found == False:
-            print("Target not found in this node.")
 
     elif isinstance(target, (Node, Leaf)):
 
-        for child in parent.children:
+        for child in children:
             if child == target:
-                target_found = True
                 return child
 
-        if target_found == False:
-            print("Target not found in this node.")
+    print("Target not found in this node.")
+    return None
 
 def node_move(target, destination): # Move the target object to the destination Node
 
-    if isinstance(destination, Node):
-        target.reparent(destination)
+    if not isinstance(target, (Node, Leaf)):
+        print("DEBUG:", "Could not move", target, "- only Node/Leaf objects can be moved.")
+        return False
 
-    else:
+    if not isinstance(destination, Node):
         print("The destination is not a Node object.")
+        return False
+
+    return target.reparent(destination)
 
 ################################################################################################
 #

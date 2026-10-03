@@ -53,6 +53,7 @@ class RoomBase(Node):
         
         self.exits = exits ## perhaps make a 'auto_generate_exits' method
         self.coordinate = None
+        self.events = []
 
     # self.children['creatures'] // Modification
     # Re-writes the usual Node add/remove child methods to work with dictionaries
@@ -97,15 +98,18 @@ class RoomBase(Node):
     def add_exits(self, exitsAdded):
         for char in exitsAdded:
             if char not in self.exits:
-                self.exits += exitsAdded
+                self.exits += char
 
     def remove_exits(self, exitsRemoved):
-        for char in exitsRemove:
-            self.exits.replace(char, "")
+        for char in exitsRemoved:
+            self.exits = self.exits.replace(char, "")
+
+    def get_exits(self):
+        return self.exits
 
     def find_exits(self):
 
-        if type(self.coordinate) == tuple:
+        if type(self.coordinate) == tuple and self.parent is not None and hasattr(self.parent, "floor_matrix"):
 
             self.exits = '' # clear current exits
             
@@ -146,14 +150,29 @@ class RoomBase(Node):
             print("DEBUG:", "This room is not part of a Floor does not have exits. Use Floor.add_rooms() to add it to a Floor.")            
 
     # Eventing/Parsing
-    def on_room_enter():
+    def on_room_enter(self):
         print(self.name)
         # What happens when the player enters the Room:
         # Description or Name is printed
         # A list of enemies is printed
         # A list of room items is printed
         # A list of interactive features is printed (switches, blocks, buttons)
-        pass
+
+        # Room events have exactly-once semantics: a triggered event stays
+        # FIRED, so re-entering the Room cannot trigger it again.
+        for event in self.events:
+            event.trigger()
+
+    def on_room_exit(self):
+        # Leaving a Room clears the per-visit (transient) state of its
+        # contents so stale item state cannot leak into the next visit or
+        # another Room. Permanent state (e.g. inventory) lives on the
+        # Player, not on the Room contents.
+        for content_category in self.children:
+            for content in self.children[content_category]:
+                reset = getattr(content, "reset_transient", None)
+                if callable(reset):
+                    reset()
 
 class RoomEntrance(RoomBase):
 
